@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "mc-ai",
+  "version": "${version}",
+  "name": "MC AI",
+  "description": "Adds an in-chat AI that responds to player messages.",
+  "authors": ["LuisAFK"],
+  "contact": {
+    "sources": "https://github.com/lafkpages/mc-ai"
+  },
+  "license": "All Rights Reserved",
+  "icon": "assets/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["luisafk.mcai.MCAI"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~26.1.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}
