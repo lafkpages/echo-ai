@@ -21,6 +21,15 @@ public class Config {
     public String exaApiKey;
 
     /**
+     * How long to wait, in milliseconds, after a triggering message before
+     * starting an AI request. Each new message resets the timer, so a rapid
+     * burst of chat is coalesced into a single request once the chatter
+     * settles rather than kicking off (and then discarding) an early run.
+     * Set to 0 to respond immediately with no debounce.
+     */
+    public int debounceMs = 300;
+
+    /**
      * Deserializes a JSON string as-is, or a JSON array by taking its first
      * element. Lets the {@code model} field accept either form.
      */

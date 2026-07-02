@@ -13,6 +13,7 @@ The AI talks to any OpenAI-compatible chat completions endpoint, so you can poin
 - **Per-player opt-out** — players can remove themselves from the AI with a command. Opted-out players' messages still count as context for others, but never trigger the AI and never receive its replies.
 - **Reasoning-model friendly** — inline `<think>…</think>` blocks are stripped from replies so chain-of-thought never leaks into chat.
 - **Concurrency-safe** — while a reply is generating, new messages supersede the in-flight request so the AI always answers against the latest chat, one request at a time.
+- **Burst coalescing** — a short, configurable debounce collapses rapid-fire messages into a single AI request, so spam or a quick back-and-forth doesn't waste API calls.
 
 ## Requirements
 
@@ -41,16 +42,18 @@ On first launch the mod writes an empty config to `<config>/echo-ai.json` (typic
   "baseUrl": "https://api.openai.com/v1",
   "apiKey": "sk-...",
   "model": "gpt-4o-mini",
-  "exaApiKey": "your-exa-api-key"
+  "exaApiKey": "your-exa-api-key",
+  "debounceMs": 300
 }
 ```
 
-| Field       | Required | Description                                                                                                                                           |
-| ----------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `baseUrl`   | ✅       | Base URL of an OpenAI-compatible API. The mod appends `/chat/completions`. A trailing slash is tolerated.                                             |
-| `apiKey`    | ✅       | API key sent as a `Bearer` token.                                                                                                                     |
-| `model`     | ✅       | Model name. May also be a JSON array of names — the first entry is used, which is handy for keeping alternatives on hand and switching by reordering. |
-| `exaApiKey` | ⬜       | [Exa](https://exa.ai/) API key. When omitted, the `web_search` tool is disabled and the mod still runs.                                               |
+| Field        | Required | Description                                                                                                                                             |
+| ------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `baseUrl`    | ✅       | Base URL of an OpenAI-compatible API. The mod appends `/chat/completions`. A trailing slash is tolerated.                                               |
+| `apiKey`     | ✅       | API key sent as a `Bearer` token.                                                                                                                       |
+| `model`      | ✅       | Model name. May also be a JSON array of names — the first entry is used, which is handy for keeping alternatives on hand and switching by reordering.   |
+| `exaApiKey`  | ⬜       | [Exa](https://exa.ai/) API key. When omitted, the `web_search` tool is disabled and the mod still runs.                                                 |
+| `debounceMs` | ⬜       | Delay (ms) before the AI reacts to a message; each new message resets it, coalescing bursts into one request. Defaults to `300`. Set to `0` to disable. |
 
 If `baseUrl`, `apiKey`, or `model` is missing, the mod logs a warning and stays inactive.
 
@@ -70,9 +73,10 @@ Opt-out state is persisted to `<config>/echo-ai-optout.json`.
 
 1. Every chat message is appended to a shared, in-memory history.
 2. Messages from opted-out players are kept as context but don't trigger the AI.
-3. Otherwise the AI runs one request at a time. New messages that arrive mid-request supersede the in-flight run, so the AI always answers against the latest chat.
-4. The model may call tools (e.g. `web_search`) and loop with their results, reply with text, or call `skip_response` to stay silent.
-5. Text replies have any `<think>` reasoning stripped and are broadcast to every opted-in player.
+3. A triggering message starts a short debounce timer (`debounceMs`, default 300ms); each further message resets it, so a burst collapses into one request once chat settles.
+4. When the timer elapses the AI runs one request at a time. New messages that arrive mid-request supersede the in-flight run, so the AI always answers against the latest chat.
+5. The model may call tools (e.g. `web_search`) and loop with their results, reply with text, or call `skip_response` to stay silent.
+6. Text replies have any `<think>` reasoning stripped and are broadcast to every opted-in player.
 
 - Conversation history is **in-memory and per server session** — it starts fresh on every server start and is capped at the most recent 50 messages.
 - The tool-calling loop is bounded (max 5 round-trips) so a misbehaving model can't loop forever.

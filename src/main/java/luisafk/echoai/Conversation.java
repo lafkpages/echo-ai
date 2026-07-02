@@ -5,6 +5,10 @@ import static luisafk.echoai.EchoAI.LOGGER;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -17,10 +21,19 @@ import net.minecraft.server.level.ServerPlayer;
  * the server thread: player messages arrive there, and async AI completions are
  * marshalled back onto it before touching anything. That keeps it lock-free.
  *
- * Coalescing with supersede-and-discard: while a request is in flight, new
- * messages are still appended to the history and bump the epoch. When the
+ * Coalescing happens at two points. Before a run starts, a triggering message
+ * schedules the run {@code debounceMs} in the future; each further message
+ * resets that timer, so a quick burst of chat collapses into one request once
+ * the chatter settles (set {@code debounceMs} to 0 to disable and start
+ * immediately). Once a run is in flight, supersede-and-discard takes over: new
+ * messages are still appended to the history and bump the epoch, and when the
  * request finishes, if the epoch changed we discard its (now stale) reply and
  * run again against the latest history; otherwise we broadcast and store it.
+ *
+ * The debounce timer fires on a background scheduler, but its callback is
+ * marshalled back onto the server thread before touching any state, preserving
+ * the lock-free invariant. {@link #shutdown()} tears the scheduler down when
+ * the server session ends.
  */
 public class Conversation {
 
@@ -32,17 +45,38 @@ public class Conversation {
     private final OptOutRegistry optOut;
     private final List<OpenAIClient.Message> history = new ArrayList<>();
 
+    // Debounce window before a run starts. When <= 0, runs start immediately
+    // and the scheduler is never created.
+    private final int debounceMs;
+    private final ScheduledExecutorService scheduler;
+
+    // Handle to the pending debounce task (if any) so it can be cancelled and
+    // rescheduled, plus a generation counter to ignore a timer that fires after
+    // being superseded (cancellation can race with an already-firing task).
+    private ScheduledFuture<?> pending;
+    private int debounceGen = 0;
+
     private boolean running = false;
     private int epoch = 0;
 
     public Conversation(
         ChatAgent agent,
         MinecraftServer server,
-        OptOutRegistry optOut
+        OptOutRegistry optOut,
+        int debounceMs
     ) {
         this.agent = agent;
         this.server = server;
         this.optOut = optOut;
+        this.debounceMs = debounceMs;
+        this.scheduler =
+            debounceMs > 0
+                ? Executors.newSingleThreadScheduledExecutor(runnable -> {
+                      Thread thread = new Thread(runnable, "echo-ai-debounce");
+                      thread.setDaemon(true);
+                      return thread;
+                  })
+                : null;
     }
 
     /**
@@ -66,9 +100,55 @@ public class Conversation {
 
         epoch++;
 
+        // A run already in flight will pick up this message via
+        // supersede-and-discard when it completes, so there's nothing to
+        // schedule. Otherwise (re)start the debounce window.
         if (!running) {
+            scheduleRun();
+        }
+    }
+
+    // (Re)starts the debounce window: cancels any pending start and schedules a
+    // fresh one, so the last message in a burst is the one that fires the run.
+    // With the debounce disabled, starts immediately.
+    private void scheduleRun() {
+        if (scheduler == null) {
             running = true;
             startRun();
+            return;
+        }
+
+        if (pending != null) {
+            pending.cancel(false);
+        }
+
+        int gen = ++debounceGen;
+        pending = scheduler.schedule(
+            () -> server.execute(() -> onDebounceElapsed(gen)),
+            debounceMs,
+            TimeUnit.MILLISECONDS
+        );
+    }
+
+    // Runs on the server thread once the debounce window elapses. Ignored if a
+    // newer message superseded this timer, or a run somehow already started.
+    private void onDebounceElapsed(int gen) {
+        if (gen != debounceGen || running) {
+            return;
+        }
+
+        pending = null;
+        running = true;
+        startRun();
+    }
+
+    /**
+     * Stops the debounce scheduler. Called when the server session ends so the
+     * background thread doesn't outlive the conversation.
+     */
+    public void shutdown() {
+        if (scheduler != null) {
+            scheduler.shutdownNow();
         }
     }
 

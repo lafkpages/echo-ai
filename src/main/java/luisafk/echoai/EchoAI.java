@@ -121,11 +121,20 @@ public class EchoAI implements ModInitializer {
 
         // Fresh conversation per server session (not persisted across restarts).
         ServerLifecycleEvents.SERVER_STARTING.register(
-            server -> conversation = new Conversation(chatAgent, server, optOut)
+            server ->
+                conversation = new Conversation(
+                    chatAgent,
+                    server,
+                    optOut,
+                    config.debounceMs
+                )
         );
-        ServerLifecycleEvents.SERVER_STOPPED.register(
-            server -> conversation = null
-        );
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            if (conversation != null) {
+                conversation.shutdown();
+            }
+            conversation = null;
+        });
 
         // Fired on the server thread after a player's chat message is broadcast.
         ServerMessageEvents.CHAT_MESSAGE.register((message, sender, params) -> {
