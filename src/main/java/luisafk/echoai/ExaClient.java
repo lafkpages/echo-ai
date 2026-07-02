@@ -1,4 +1,4 @@
-package luisafk.mcai;
+package luisafk.echoai;
 
 import com.google.gson.Gson;
 import java.net.URI;
@@ -85,8 +85,7 @@ public class ExaClient {
             sb.append("Title: ").append(result.title()).append("\n");
             sb.append("URL: ").append(result.url()).append("\n");
             if (result.text() != null && !result.text().isBlank()) {
-                sb
-                    .append("Content: ")
+                sb.append("Content: ")
                     .append(result.text().strip())
                     .append("\n");
             }

@@ -1,6 +1,6 @@
-package luisafk.mcai;
+package luisafk.echoai;
 
-import static luisafk.mcai.MCAI.LOGGER;
+import static luisafk.echoai.EchoAI.LOGGER;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;

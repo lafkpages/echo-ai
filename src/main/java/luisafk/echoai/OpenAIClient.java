@@ -1,4 +1,4 @@
-package luisafk.mcai;
+package luisafk.echoai;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;

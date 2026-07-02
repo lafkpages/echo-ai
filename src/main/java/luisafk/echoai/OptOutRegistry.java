@@ -1,6 +1,6 @@
-package luisafk.mcai;
+package luisafk.echoai;
 
-import static luisafk.mcai.MCAI.LOGGER;
+import static luisafk.echoai.EchoAI.LOGGER;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -18,7 +18,7 @@ import net.fabricmc.loader.api.FabricLoader;
  * their chat recorded as context, but their messages never trigger the AI and
  * they are excluded from its replies.
  *
- * Persisted to {@code <configDir>/mc-ai-optout.json} as a JSON array of player
+ * Persisted to {@code <configDir>/echo-ai-optout.json} as a JSON array of player
  * UUIDs: loaded once on construction, and rewritten whenever the set changes.
  * It lives in its own file rather than the main config so admins don't have to
  * scroll past machine-managed data.
@@ -32,7 +32,7 @@ public class OptOutRegistry {
 
     private static final File FILE = FabricLoader.getInstance()
         .getConfigDir()
-        .resolve("mc-ai-optout.json")
+        .resolve("echo-ai-optout.json")
         .toFile();
     private static final Gson GSON = new GsonBuilder()
         .setPrettyPrinting()

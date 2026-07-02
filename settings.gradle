@@ -10,4 +10,4 @@ pluginManagement {
 }
 
 // Should match your modid
-rootProject.name = 'mc-ai'
+rootProject.name = 'echo-ai'

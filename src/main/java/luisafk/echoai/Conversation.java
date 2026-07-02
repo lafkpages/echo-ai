@@ -1,6 +1,6 @@
-package luisafk.mcai;
+package luisafk.echoai;
 
-import static luisafk.mcai.MCAI.LOGGER;
+import static luisafk.echoai.EchoAI.LOGGER;
 
 import java.util.ArrayList;
 import java.util.List;

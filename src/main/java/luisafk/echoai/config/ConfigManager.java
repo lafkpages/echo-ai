@@ -1,6 +1,6 @@
-package luisafk.mcai.config;
+package luisafk.echoai.config;
 
-import static luisafk.mcai.MCAI.LOGGER;
+import static luisafk.echoai.EchoAI.LOGGER;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -14,7 +14,7 @@ public class ConfigManager {
 
     private static final File CONFIG_FILE = FabricLoader.getInstance()
         .getConfigDir()
-        .resolve("mc-ai.json")
+        .resolve("echo-ai.json")
         .toFile();
     private static final Gson GSON = new GsonBuilder()
         .setPrettyPrinting()

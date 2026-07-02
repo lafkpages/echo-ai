@@ -1,4 +1,4 @@
-package luisafk.mcai;
+package luisafk.echoai;
 
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandSourceStack;
@@ -7,9 +7,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
- * Registers the {@code /mcai} command, which lets players opt out of (or back
- * into) the AI. Opted-out players are still recorded as context for everyone
- * else, but their messages never trigger the AI and they don't receive its
+ * Registers the {@code /echo} command, which lets players opt out of (or back
+ * into) Echo AI. Opted-out players are still recorded as context for everyone
+ * else, but their messages never trigger Echo and they don't receive its
  * replies.
  */
 public final class AiCommand {
@@ -20,7 +20,7 @@ public final class AiCommand {
         CommandRegistrationCallback.EVENT.register(
             (dispatcher, registryAccess, environment) ->
                 dispatcher.register(
-                    Commands.literal("mcai")
+                    Commands.literal("echo")
                         .then(
                             Commands.literal("optout").executes(ctx ->
                                 setOptOut(ctx.getSource(), optOut, true)
@@ -57,12 +57,12 @@ public final class AiCommand {
         String message;
         if (optedOut) {
             message = changed
-                ? "You've opted out of the AI. It will ignore your messages and you won't see its replies."
-                : "You're already opted out of the AI.";
+                ? "You've opted out of Echo AI. It will ignore your messages and you won't see its replies."
+                : "You're already opted out of Echo AI.";
         } else {
             message = changed
-                ? "You've opted back into the AI."
-                : "You're already opted into the AI.";
+                ? "You've opted back into Echo AI."
+                : "You're already opted into Echo AI.";
         }
 
         source.sendSuccess(() -> Component.literal(message), false);
@@ -82,8 +82,8 @@ public final class AiCommand {
         }
 
         String message = optOut.isOptedOut(player.getUUID())
-            ? "You're opted out of the AI. Use /mcai optin to rejoin."
-            : "You're opted into the AI. Use /mcai optout to opt out.";
+            ? "You're opted out of Echo AI. Use /echo optin to rejoin."
+            : "You're opted into Echo AI. Use /echo optout to opt out.";
 
         source.sendSuccess(() -> Component.literal(message), false);
         return 1;

@@ -1,4 +1,4 @@
-package luisafk.mcai.config;
+package luisafk.echoai.config;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonDeserializationContext;

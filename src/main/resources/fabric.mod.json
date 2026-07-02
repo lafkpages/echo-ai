@@ -1,18 +1,18 @@
 {
   "schemaVersion": 1,
-  "id": "mc-ai",
+  "id": "echo-ai",
   "version": "${version}",
-  "name": "MC AI",
-  "description": "Adds an in-chat AI that responds to player messages.",
+  "name": "Echo AI",
+  "description": "Adds Echo, an in-chat AI that responds to player messages.",
   "authors": ["LuisAFK"],
   "contact": {
-    "sources": "https://github.com/lafkpages/mc-ai"
+    "sources": "https://github.com/lafkpages/echo-ai"
   },
   "license": "All Rights Reserved",
   "icon": "assets/icon.png",
   "environment": "*",
   "entrypoints": {
-    "main": ["luisafk.mcai.MCAI"]
+    "main": ["luisafk.echoai.EchoAI"]
   },
   "depends": {
     "fabricloader": ">=0.19.3",

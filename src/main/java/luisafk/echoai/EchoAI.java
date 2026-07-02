@@ -1,7 +1,7 @@
-package luisafk.mcai;
+package luisafk.echoai;
 
-import luisafk.mcai.config.Config;
-import luisafk.mcai.config.ConfigManager;
+import luisafk.echoai.config.Config;
+import luisafk.echoai.config.ConfigManager;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
@@ -10,9 +10,9 @@ import net.minecraft.resources.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class MCAI implements ModInitializer {
+public class EchoAI implements ModInitializer {
 
-    public static final String MOD_ID = "mc-ai";
+    public static final String MOD_ID = "echo-ai";
 
     // This logger is used to write text to the console and the log file.
     // It is considered best practice to use your mod id as the logger's name.
@@ -28,7 +28,7 @@ public class MCAI implements ModInitializer {
             .orElse("unknown");
 
     private static final String SYSTEM_PROMPT = """
-        You are a helpful AI assistant that responds to player's chat messages in Minecraft (Java Edition).
+        You are Echo, a helpful AI assistant that responds to player's chat messages in Minecraft (Java Edition).
         You are only present in chat. You do not exist outside of it.
         You may respond to requests not related to Minecraft, but default to assuming the player is talking about Minecraft or Minecraft-related content, and Java Edition in particular.
         The current Minecraft version is ${minecraftVersion}.
@@ -89,7 +89,7 @@ public class MCAI implements ModInitializer {
             config.model.isBlank()
         ) {
             LOGGER.warn(
-                "No base URL or API key configured, mc-ai will not run."
+                "No base URL or API key configured, Echo AI will not run."
             );
             return;
         }
