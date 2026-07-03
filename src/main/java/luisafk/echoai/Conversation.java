@@ -9,7 +9,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import net.minecraft.network.chat.ChatType;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.OutgoingChatMessage;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -39,6 +41,9 @@ public class Conversation {
 
     // Improve later: smarter context compaction instead of a flat message cap.
     private static final int MAX_HISTORY = 50;
+
+    // Name shown in chat for Echo's disguised messages, e.g. "<Echo> hello".
+    private static final String SENDER_NAME = "Echo";
 
     private final ChatAgent agent;
     private final MinecraftServer server;
@@ -190,11 +195,21 @@ public class Conversation {
     }
 
     // Sends the AI reply to every online player except those who opted out.
+    // Uses a disguised chat message so it renders like a normal player line
+    // ("<Echo> ...") via the vanilla chat decoration, without being a signed
+    // player message or a plain system message.
     private void broadcast(String text) {
-        Component message = Component.literal(text);
+        OutgoingChatMessage message = new OutgoingChatMessage.Disguised(
+            Component.literal(text)
+        );
+        ChatType.Bound bound = ChatType.bind(
+            ChatType.CHAT,
+            server.registryAccess(),
+            Component.literal(SENDER_NAME)
+        );
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (!optOut.isOptedOut(player.getUUID())) {
-                player.sendSystemMessage(message);
+                message.sendToPlayer(player, false, bound);
             }
         }
     }
