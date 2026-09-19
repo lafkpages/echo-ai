@@ -8,6 +8,7 @@ The AI talks to any OpenAI-compatible chat completions endpoint, so you can poin
 
 - **In-chat assistant** — watches all chat messages and replies inline. Everyone sees the same conversation; there's no per-player session.
 - **Knows when to stay quiet** — the model can call a `skip_response` tool to ignore small talk or messages that aren't directed at it, instead of replying to everything.
+- **Jev pre-filter (optional)** — with a [TypeSafe](https://typesafe.ai/) API key, a fast, cheap System One model judges whether each message warrants a reply _before_ the main LLM is invoked, skipping the expensive request entirely for small talk. If the key is missing or Jev is unavailable, the mod falls back to the standard LLM-only behavior.
 - **Web search (optional)** — a `web_search` tool powered by [Exa](https://exa.ai/) lets the model look up current or version-specific facts instead of guessing. Enabled automatically when an Exa API key is configured.
 - **Minecraft-aware** — the system prompt is primed for Minecraft Java Edition, injects the running game version, and encourages short replies using Minecraft `§` formatting codes.
 - **Per-player opt-out** — players can remove themselves from the AI with a command. Opted-out players' messages still count as context for others, but never trigger the AI and never receive its replies.
@@ -43,17 +44,21 @@ On first launch the mod writes an empty config to `<config>/echo-ai.json` (typic
   "apiKey": "sk-...",
   "model": "gpt-4o-mini",
   "exaApiKey": "your-exa-api-key",
+  "jevApiKey": "your-typesafe-api-key",
+  "jevResponseThreshold": 0.3,
   "debounceMs": 300
 }
 ```
 
-| Field        | Required | Description                                                                                                                                             |
-| ------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `baseUrl`    | ✅       | Base URL of an OpenAI-compatible API. The mod appends `/chat/completions`. A trailing slash is tolerated.                                               |
-| `apiKey`     | ✅       | API key sent as a `Bearer` token.                                                                                                                       |
-| `model`      | ✅       | Model name. May also be a JSON array of names — the first entry is used, which is handy for keeping alternatives on hand and switching by reordering.   |
-| `exaApiKey`  | ⬜       | [Exa](https://exa.ai/) API key. When omitted, the `web_search` tool is disabled and the mod still runs.                                                 |
-| `debounceMs` | ⬜       | Delay (ms) before the AI reacts to a message; each new message resets it, coalescing bursts into one request. Defaults to `300`. Set to `0` to disable. |
+| Field                  | Required | Description                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `baseUrl`              | ✅       | Base URL of an OpenAI-compatible API. The mod appends `/chat/completions`. A trailing slash is tolerated.                                                                                                                                                                                                                                      |
+| `apiKey`               | ✅       | API key sent as a `Bearer` token.                                                                                                                                                                                                                                                                                                              |
+| `model`                | ✅       | Model name. May also be a JSON array of names — the first entry is used, which is handy for keeping alternatives on hand and switching by reordering.                                                                                                                                                                                          |
+| `exaApiKey`            | ⬜       | [Exa](https://exa.ai/) API key. When omitted, the `web_search` tool is disabled and the mod still runs.                                                                                                                                                                                                                                        |
+| `jevApiKey`            | ⬜       | [TypeSafe](https://typesafe.ai/) API key. When set, a Jev pre-filter decides whether each message warrants a reply before the LLM runs, skipping the LLM for messages that don't. Any Jev failure (bad key, outage, rate limit) falls back to the normal LLM behavior. Note that chat content is sent to TypeSafe's API while this is enabled. |
+| `jevResponseThreshold` | ⬜       | Probability (0–1) above which the Jev pre-filter passes a message on to the LLM. Lower values reply more readily; higher values stay silent more often. Defaults to `0.3`. Only used when `jevApiKey` is set.                                                                                                                                  |
+| `debounceMs`           | ⬜       | Delay (ms) before the AI reacts to a message; each new message resets it, coalescing bursts into one request. Defaults to `300`. Set to `0` to disable.                                                                                                                                                                                        |
 
 If `baseUrl`, `apiKey`, or `model` is missing, the mod logs a warning and stays inactive.
 
@@ -74,9 +79,10 @@ Opt-out state is persisted to `<config>/echo-ai-optout.json`.
 1. Every chat message is appended to a shared, in-memory history.
 2. Messages from opted-out players are kept as context but don't trigger the AI.
 3. A triggering message starts a short debounce timer (`debounceMs`, default 300ms); each further message resets it, so a burst collapses into one request once chat settles.
-4. When the timer elapses the AI runs one request at a time. New messages that arrive mid-request supersede the in-flight run, so the AI always answers against the latest chat.
-5. The model may call tools (e.g. `web_search`) and loop with their results, reply with text, or call `skip_response` to stay silent.
-6. Text replies have any `<think>` reasoning stripped and are broadcast to every opted-in player.
+4. When the timer elapses and a TypeSafe API key is configured, a Jev pre-filter first judges whether the burst warrants a reply at all; if not, the run ends without calling the LLM. If Jev is unavailable or errors, the mod falls back to the LLM path.
+5. The AI runs one request at a time. New messages that arrive mid-request supersede the in-flight run, so the AI always answers against the latest chat.
+6. The model may call tools (e.g. `web_search`) and loop with their results, reply with text, or call `skip_response` to stay silent.
+7. Text replies have any `<think>` reasoning stripped and are broadcast to every opted-in player.
 
 - Conversation history is **in-memory and per server session** — it starts fresh on every server start and is capped at the most recent 50 messages.
 - The tool-calling loop is bounded (max 5 round-trips) so a misbehaving model can't loop forever.

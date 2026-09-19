@@ -21,6 +21,25 @@ public class Config {
     public String exaApiKey;
 
     /**
+     * Optional TypeSafe (https://typesafe.ai) API key. When set, a Jev
+     * "System One" pre-filter judges each debounced chat burst before the
+     * LLM is invoked: if Jev concludes a reply is probably not warranted,
+     * the LLM request is skipped entirely. When the key is missing or Jev
+     * fails for any reason, the mod falls back to the plain LLM path.
+     */
+    public String jevApiKey;
+
+    /**
+     * Probability (0-1) above which the Jev pre-filter passes a message on
+     * to the LLM; only used when {@code jevApiKey} is set. Lower values make
+     * Echo reply more readily (fewer wrongly-ignored messages), higher
+     * values make it stay silent more often. The default is deliberately
+     * conservative, since wrongly staying silent is more visible than an
+     * unnecessary LLM request.
+     */
+    public double jevResponseThreshold = 0.3;
+
+    /**
      * How long to wait, in milliseconds, after a triggering message before
      * starting an AI request. Each new message resets the timer, so a rapid
      * burst of chat is coalesced into a single request once the chatter

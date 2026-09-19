@@ -5,10 +5,13 @@ import static luisafk.echoai.EchoAI.LOGGER;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import net.minecraft.network.chat.ChatType;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.OutgoingChatMessage;
@@ -36,6 +39,11 @@ import net.minecraft.server.level.ServerPlayer;
  * marshalled back onto the server thread before touching any state, preserving
  * the lock-free invariant. {@link #shutdown()} tears the scheduler down when
  * the server session ends.
+ *
+ * <p>When a {@link JevClient} is configured, each run is first gated by that
+ * cheap pre-filter: if Jev concludes a reply is probably not warranted, the
+ * LLM is never invoked. Any Jev failure falls back to the LLM path, so the
+ * pre-filter can only ever skip work, never break the conversation.
  */
 public class Conversation {
 
@@ -45,7 +53,16 @@ public class Conversation {
     // Name shown in chat for Echo's disguised messages, e.g. "<Echo> hello".
     private static final String SENDER_NAME = "Echo";
 
+    // How a player message is rendered into the shared history. This exact
+    // format is also described to the model in the system prompt, and
+    // JevClient parses it back out — this is the only place that knows it.
+    private static final Pattern PLAYER_LINE = Pattern.compile(
+        "^<(.+?)> (.*)$",
+        Pattern.DOTALL
+    );
+
     private final ChatAgent agent;
+    private final JevClient jev; // nullable: no pre-filter when absent
     private final MinecraftServer server;
     private final OptOutRegistry optOut;
     private final List<OpenAIClient.Message> history = new ArrayList<>();
@@ -66,11 +83,13 @@ public class Conversation {
 
     public Conversation(
         ChatAgent agent,
+        JevClient jev,
         MinecraftServer server,
         OptOutRegistry optOut,
         int debounceMs
     ) {
         this.agent = agent;
+        this.jev = jev;
         this.server = server;
         this.optOut = optOut;
         this.debounceMs = debounceMs;
@@ -94,7 +113,9 @@ public class Conversation {
         String text,
         boolean triggersAi
     ) {
-        history.add(OpenAIClient.Message.user("<" + playerName + "> " + text));
+        history.add(
+            OpenAIClient.Message.user(formatPlayerLine(playerName, text))
+        );
         trim();
 
         // Opted-out players are still recorded as context above, but never
@@ -111,6 +132,24 @@ public class Conversation {
         if (!running) {
             scheduleRun();
         }
+    }
+
+    /** A player message split back out of its formatted history line. */
+    record PlayerLine(String name, String text) {}
+
+    static String formatPlayerLine(String playerName, String text) {
+        return "<" + playerName + "> " + text;
+    }
+
+    /** Undoes {@link #formatPlayerLine}, or null if {@code content} isn't one. */
+    static PlayerLine parsePlayerLine(String content) {
+        if (content == null) {
+            return null;
+        }
+        Matcher matcher = PLAYER_LINE.matcher(content);
+        return matcher.matches()
+            ? new PlayerLine(matcher.group(1), matcher.group(2))
+            : null;
     }
 
     // (Re)starts the debounce window: cancels any pending start and schedules a
@@ -161,11 +200,52 @@ public class Conversation {
         int startEpoch = epoch;
         List<OpenAIClient.Message> snapshot = new ArrayList<>(history);
 
-        agent
-            .respond(snapshot)
-            .whenComplete((reply, error) ->
-                server.execute(() -> onRunComplete(startEpoch, reply, error))
-            );
+        run(snapshot).whenComplete((reply, error) ->
+            server.execute(() -> onRunComplete(startEpoch, reply, error))
+        );
+    }
+
+    /**
+     * Produces this run's reply, optionally gated behind the Jev pre-filter.
+     * Jev failures fall back to running the LLM, so the pre-filter can only
+     * ever skip work, never break the conversation.
+     */
+    private CompletableFuture<Optional<String>> run(
+        List<OpenAIClient.Message> snapshot
+    ) {
+        if (jev == null) {
+            return agent.respond(snapshot);
+        }
+
+        return jev
+            .decide(snapshot)
+            .thenApply(decision -> {
+                LOGGER.debug(
+                    "Jev pre-filter: probability a response is warranted = {}",
+                    decision.probability()
+                );
+                return decision.shouldRespond();
+            })
+            // Fail open: if Jev is unavailable or misconfigured, run the LLM
+            // exactly as before the pre-filter existed.
+            .exceptionally(error -> {
+                LOGGER.warn(
+                    "Jev pre-filter failed, falling back to LLM",
+                    error
+                );
+                return true;
+            })
+            .thenCompose(allowed -> {
+                if (!allowed) {
+                    LOGGER.debug(
+                        "Jev pre-filter: staying silent, skipping the LLM."
+                    );
+                    return CompletableFuture.completedFuture(
+                        Optional.<String>empty()
+                    );
+                }
+                return agent.respond(snapshot);
+            });
     }
 
     private void onRunComplete(
